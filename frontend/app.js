@@ -51,6 +51,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function startCountdown() {
+        const countdownContainer = document.getElementById('countdown-container');
+        countdownContainer.style.display = 'block';
+    
         // Initialiser le compte à rebours
         let secondsLeft = 10;
         const countdownElement = document.getElementById('countdown');
@@ -67,7 +70,10 @@ document.addEventListener('DOMContentLoaded', () => {
         
             if (secondsLeft <= 0) {
                 clearInterval(countdownInterval);
-                showGameBoard(); // Fonction qui affiche le plateau de jeu
+                // Passer à l'écran de jeu (remplace showGameBoard())
+                gameSetup.classList.add('hidden');
+                gameArea.classList.remove('hidden');
+                initGame();
             }
         }, 1000);
     }
