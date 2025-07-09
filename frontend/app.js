@@ -212,11 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 gameIdDisplay.classList.remove('hidden');
                 
                 // Attendre un moment puis passer à l'écran de jeu
-                setTimeout(() => {
-                    gameSetup.classList.add('hidden');
-                    gameArea.classList.remove('hidden');
-                    initGame();
-                }, 1000);
+                startCountdown();
             }
         } catch (error) {
             console.error('Erreur lors de la création de la partie:', error);
