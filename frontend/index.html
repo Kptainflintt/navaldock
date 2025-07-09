@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bataille Navale - Docker Edition</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Bataille Navale - Docker Edition</h1>
+        
+        <div class="game-setup" id="game-setup">
+            <h2>Nouvelle partie</h2>
+            <button id="new-game-btn" class="btn">Créer une partie</button>
+            <div id="game-id-display" class="hidden">
+                <p>Partagez ce code de partie avec votre adversaire :</p>
+                <div class="game-id-box"><span id="game-id"></span></div>
+            </div>
+            <div class="join-game">
+                <h3>Rejoindre une partie</h3>
+                <input type="text" id="join-game-id" placeholder="Code de la partie">
+                <button id="join-game-btn" class="btn">Rejoindre</button>
+            </div>
+        </div>
+
+        <div class="game-boards hidden" id="game-area">
+            <div class="player-area">
+                <h2>Votre flotte</h2>
+                <div class="board" id="player-board"></div>
+                <div class="ship-selection" id="ship-selection">
+                    <h3>Placez vos navires</h3>
+                    <div class="ships">
+                        <div class="ship" data-size="5" draggable="true">Porte-avions (5)</div>
+                        <div class="ship" data-size="4" draggable="true">Croiseur (4)</div>
+                        <div class="ship" data-size="3" draggable="true">Contre-torpilleur (3)</div>
+                        <div class="ship" data-size="3" draggable="true">Sous-marin (3)</div>
+                        <div class="ship" data-size="2" draggable="true">Torpilleur (2)</div>
+                    </div>
+                    <div class="orientation">
+                        <label>
+                            <input type="radio" name="orientation" value="horizontal" checked>
+                            Horizontal
+                        </label>
+                        <label>
+                            <input type="radio" name="orientation" value="vertical">
+                            Vertical
+                        </label>
+                    </div>
+                    <button id="ready-btn" class="btn" disabled>Prêt !</button>
+                </div>
+            </div>
+            
+            <div class="opponent-area">
+                <h2>Flotte ennemie</h2>
+                <div class="board" id="opponent-board"></div>
+                <div class="game-status">
+                    <p id="status-message">En attente de l'adversaire...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
