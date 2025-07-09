@@ -50,6 +50,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function startCountdown() {
+        // Initialiser le compte à rebours
+        let secondsLeft = 10;
+        const countdownElement = document.getElementById('countdown');
+        const progressBar = document.getElementById('countdown-progress');
+    
+        // Mettre à jour le compte à rebours chaque seconde
+        const countdownInterval = setInterval(() => {
+            secondsLeft--;
+            countdownElement.textContent = secondsLeft;
+        
+            // Mettre à jour la barre de progression
+            const progressWidth = (secondsLeft / 10) * 100;
+            progressBar.style.width = `${progressWidth}%`;
+        
+            if (secondsLeft <= 0) {
+                clearInterval(countdownInterval);
+                showGameBoard(); // Fonction qui affiche le plateau de jeu
+            }
+        }, 1000);
+    }
+
     // Initialiser le jeu
     function initGame() {
         initializeBoards();
