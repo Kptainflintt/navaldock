@@ -1,139 +1,84 @@
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 import redis
-import json
 import os
 import random
+import json
 
 app = Flask(__name__)
+CORS(app)
 
-# Connexion Redis selon variables d'environnement Docker
-redis_host = os.environ.get('REDIS_HOST', 'localhost')
-redis_port = os.environ.get('REDIS_PORT', 6379)
-r = redis.Redis(host=redis_host, port=redis_port, db=0)
+r = redis.Redis(host=os.environ.get('REDIS_HOST', 'redis'), port=6379, db=0, decode_responses=True)
 
-@app.route('/')
-def home():
-    return jsonify({"status": "ok", "message": "API Bataille Navale opérationnelle"})
+PLATEAU_SIZE = 8
+SHIPS = [3, 2, 2]  # Trois bateaux: taille 3, 2 et 2 cases
 
-@app.route('/new_game', methods=['POST'])
-def new_game():
-    game_id = random.randint(1000, 9999)
-    game_data = {
-        'board_player1': create_empty_board(),
-        'board_player2': create_empty_board(),
-        'turn': 'player1',
-        'game_over': False,
-        'player1_ready': False,
-        'player2_ready': False,
-        'player1_ships': [],
-        'player2_ships': []
-    }
-    r.set(f'game:{game_id}', json.dumps(game_data))
-    return jsonify({"game_id": game_id})
+def new_board():
+    board = [[0]*PLATEAU_SIZE for _ in range(PLATEAU_SIZE)]
+    for ship_length in SHIPS:
+        placed = False
+        while not placed:
+            x = random.randint(0, PLATEAU_SIZE-1)
+            y = random.randint(0, PLATEAU_SIZE-1)
+            horizontal = random.choice([True, False])
+            try:
+                # placement sans recouvrement
+                if horizontal:
+                    if y + ship_length > PLATEAU_SIZE: continue
+                    if any(board[x][y+j] for j in range(ship_length)): continue
+                    for j in range(ship_length): board[x][y+j] = 1
+                else:
+                    if x + ship_length > PLATEAU_SIZE: continue
+                    if any(board[x+i][y] for i in range(ship_length)): continue
+                    for i in range(ship_length): board[x+i][y] = 1
+                placed = True
+            except:
+                continue
+    return board
 
-@app.route('/join_game/<int:game_id>', methods=['POST'])
-def join_game(game_id):
-    game_key = f'game:{game_id}'
-    if not r.exists(game_key):
-        return jsonify({"status": "error", "message": "Game not found"}), 404
-    
-    return jsonify({"status": "ok", "game_id": game_id})
+@app.route("/api/new_game", methods=["POST"])
+def api_new_game():
+    board = new_board()
+    game_id = r.incr("games_counter")
+    r.set(f"game:{game_id}:board", json.dumps(board))
+    r.set(f"game:{game_id}:hits", json.dumps([[0]*PLATEAU_SIZE for _ in range(PLATEAU_SIZE)]))
+    return jsonify(game_id=game_id, size=PLATEAU_SIZE)
 
-@app.route('/player_ready/<int:game_id>', methods=['POST'])
-def player_ready(game_id):
-    data = request.json
-    player_type = data.get('player_type')
-    ships = data.get('ships', [])
-    
-    game_key = f'game:{game_id}'
-    if not r.exists(game_key):
-        return jsonify({"status": "error", "message": "Game not found"}), 404
-    
-    game_data = json.loads(r.get(game_key))
-    
-    # Marquer le joueur comme prêt et sauvegarder ses navires
-    if player_type == 'player1':
-        game_data['player1_ready'] = True
-        game_data['player1_ships'] = ships
-    elif player_type == 'player2':
-        game_data['player2_ready'] = True
-        game_data['player2_ships'] = ships
-    
-    r.set(game_key, json.dumps(game_data))
-    
-    return jsonify({
-        "status": "ok", 
-        "both_ready": game_data['player1_ready'] and game_data['player2_ready']
-    })
+@app.route("/api/shoot/<int:game_id>", methods=["POST"])
+def api_shoot(game_id):
+    data = request.get_json()
+    x, y = data["x"], data["y"]
 
-@app.route('/game_status/<int:game_id>', methods=['GET'])
-def game_status(game_id):
-    game_key = f'game:{game_id}'
-    if not r.exists(game_key):
-        return jsonify({"status": "error", "message": "Game not found"}), 404
-    
-    game_data = json.loads(r.get(game_key))
-    
-    return jsonify({
-        "status": "ok",
-        "both_players_ready": game_data['player1_ready'] and game_data['player2_ready'],
-        "turn": game_data['turn'],
-        "game_over": game_data['game_over']
-    })
+    board = json.loads(r.get(f"game:{game_id}:board"))
+    hits = json.loads(r.get(f"game:{game_id}:hits"))
 
-@app.route('/attack/<int:game_id>', methods=['POST'])
-def attack(game_id):
-    data = request.json
-    player = data.get('player')
-    row = data.get('row')
-    col = data.get('col')
-    
-    game_key = f'game:{game_id}'
-    if not r.exists(game_key):
-        return jsonify({"status": "error", "message": "Game not found"}), 404
-    
-    game_data = json.loads(r.get(game_key))
-    
-    # Vérifier si c'est bien le tour du joueur
-    if game_data['turn'] != player:
-        return jsonify({"status": "error", "message": "Not your turn"}), 400
-    
-    # Déterminer le joueur cible et vérifier si l'attaque touche un navire
-    target_ships = 'player2_ships' if player == 'player1' else 'player1_ships'
-    hit = False
-    
-    for ship in game_data[target_ships]:
-        positions = ship.get('positions', [])
-        for pos in positions:
-            if pos[0] == row and pos[1] == col:
-                hit = True
-                # Marquer la position comme touchée
-                positions.remove(pos)
-                break
-        if hit:
-            break
-    
-    # Basculer le tour
-    game_data['turn'] = 'player2' if player == 'player1' else 'player1'
-    
-    # Vérifier si le jeu est terminé (tous les navires d'un joueur sont coulés)
-    ships_remaining_player1 = sum(len(ship.get('positions', [])) for ship in game_data['player1_ships'])
-    ships_remaining_player2 = sum(len(ship.get('positions', [])) for ship in game_data['player2_ships'])
-    
-    if ships_remaining_player1 == 0 or ships_remaining_player2 == 0:
-        game_data['game_over'] = True
-    
-    # Sauvegarder l'état du jeu
-    r.set(game_key, json.dumps(game_data))
-    
-    return jsonify({
-        "status": "ok", 
-        "hit": hit, 
-        "game_over": game_data['game_over']
-    })
+    if hits[x][y]:
+        return jsonify(result="déjà tenté", sunk=False)
 
-def create_empty_board():
-    return [[0 for _ in range(10)] for _ in range(10)]
+    if board[x][y] == 1:
+        hits[x][y] = 2  # touché
+        r.set(f"game:{game_id}:hits", json.dumps(hits))
+        # Vérifie si le bateau est coulé
+        sunk = False
+        def is_sunk():
+            for i in range(PLATEAU_SIZE):
+                for j in range(PLATEAU_SIZE):
+                    if board[i][j]==1 and hits[i][j]!=2:
+                        return False
+            return True
+        if is_sunk():
+            return jsonify(result="coulé !", sunk=True)
+        else:
+            return jsonify(result="touché", sunk=False)
+    else:
+        hits[x][y] = 1  # raté
+        r.set(f"game:{game_id}:hits", json.dumps(hits))
+        return jsonify(result="manqué", sunk=False)
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+@app.route("/api/state/<int:game_id>")
+def state(game_id):
+    hits = json.loads(r.get(f"game:{game_id}:hits"))
+    return jsonify(hits=hits)
+
+if __name__ == "__main__":
+    app.run(debug=True, port=5000, host="0.0.0.0")
